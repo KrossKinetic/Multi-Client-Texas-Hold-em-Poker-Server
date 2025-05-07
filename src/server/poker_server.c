@@ -36,6 +36,9 @@ int main(int argc, char **argv) {
     char buffer[BUFFER_SIZE] = {0};
     socklen_t addrlen = sizeof(struct sockaddr_in);
 
+    int rand_seed = argc == 2 ? atoi(argv[1]) : 0;
+    init_game_state(&game, 100, rand_seed);
+
     //Setup the server infrastructre and accept the 6 players on ports 2201, 2202, 2203, 2204, 2205, 2206
     for (int i = 0; i < NUM_PORTS; i++){
         if ((server_fds[i] = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -59,7 +62,7 @@ int main(int argc, char **argv) {
         }
     
         // Listen for incoming connections
-        if (listen(server_fds[i], 3) < 0) {
+        if (listen(server_fds[i], 0) < 0) {
             perror("[Server] listen() failed.");
             exit(EXIT_FAILURE);
         }
@@ -67,16 +70,17 @@ int main(int argc, char **argv) {
         printf("[Server] Running on port %d\n", BASE_PORT+i);
     }
 
+
     // Do Accept Separately after listening to all 6 ports and store the sockets:
     for (int i = 0; i < NUM_PORTS; i++){
-        if ((game.sockets[i] = accept(server_fds[i], (struct sockaddr *)&server_address, (socklen_t *)&addrlen)) < 0) {
-            perror("[Server] accept() failed.");
+        if ((game.sockets[i] = accept(server_fds[i], (struct sockaddr *)&server_address, (socklen_t *)&addrlen)) == 0) {
+            printf("[Server] accept() failed.\n");
             exit(EXIT_FAILURE);
+        } else {
+            printf("[Server] accept() successful at port %d \n",game.sockets[i]);
         }
     }
-   
-    int rand_seed = argc == 2 ? atoi(argv[1]) : 0;
-    init_game_state(&game, 100, rand_seed);
+
 
     //JOIN STATE
     game.round_stage = ROUND_JOIN;
@@ -84,14 +88,9 @@ int main(int argc, char **argv) {
     client_packet_t received_packet; // Declare a variable of the correct struct type
     memset(&received_packet, 0, sizeof(client_packet_t));
 
-
     for (int i = 0; i < MAX_PLAYERS; i++) {    
         int nbytes = read(game.sockets[i], &received_packet, sizeof(client_packet_t)); // Read JOIN into the struct
-        if (nbytes <= 0) {
-            fprintf(stderr, "[Server] Player %d: Read error or disconnect when expecting JOIN. Bytes: %d\n", i, nbytes);
-            exit(EXIT_FAILURE);
-        }
-    
+        // /workspaces/cse220_hw5/build/tui.client
         if (received_packet.packet_type == JOIN) {
             printf("[Server] Player %d sent JOIN packet successfully.\n", i);
         } else {
