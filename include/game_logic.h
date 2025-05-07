@@ -1,6 +1,6 @@
 #ifndef GAME_LOGIC_H
 #define GAME_LOGIC_H
-
+#include <assert.h>
 #include "poker_client.h"  // for card_t, player_id_t
 #include "macros.h"        // for constants like MAX_PLAYERS
 
@@ -35,7 +35,7 @@ typedef struct {
     player_status_t player_status[MAX_PLAYERS];    // FOLDED, ACTIVE, etc
     int pot_size;                                  // total chips in pot
     int current_player;                            // index of current turn
-    int dealer_player;                             // index of dealer TODO
+    int dealer_player;                             // index of dealer
     round_stage_t round_stage;                     // init/preflop/flop/turn/river/showdown
     int num_players;                               // total players in game
     int sockets[MAX_PLAYERS];                      // sockets for each player
@@ -49,6 +49,13 @@ void shuffle_deck(card_t deck[DECK_SIZE]);
 int check_betting_end(game_state_t *game);
 int find_winner(game_state_t *game);
 int evaluate_hand(game_state_t *game, player_id_t pid);
+int calculate_5card_value(card_t current_hand[]);
+int set_card_tie(int final_points, int ranks[]);
+void sort_cards(card_t *val);
+int compare_cards_by_rank_desc(const void *a, const void *b);
+int get_suit(card_t card);
+int get_card_rank(card_t card);
+void find_next_player(game_state_t *game);
 
 void server_join(game_state_t *game);
 int server_ready(game_state_t *game);
