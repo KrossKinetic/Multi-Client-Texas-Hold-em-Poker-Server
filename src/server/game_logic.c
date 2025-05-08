@@ -153,8 +153,12 @@ int server_ready(game_state_t *game) {
         }
     }
 
-    if (game->num_players < 2){
+    if (game->num_players == 1){
         return 0; // Return 0 not enuf players
+    }
+
+    if (game->num_players == 0){
+        return -1; // Return 0 not enuf players
     }
 
     int cur_player = game->dealer_player;
@@ -581,20 +585,16 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
         if (chk == 0){ // IF ACK
             printf("[Server] Client Handler Betting for Player: %d was a SUCCESS \n",game->current_player);
             if (received_packet->packet_type == RAISE) {i = 0;activ_all_temp=activ_all_temp2;} // Reset i if successfully raised
-            
+        
             if ((i + 1) != activ_all_temp) find_next_player(game,0);
             else find_next_player(game,1);
-
             send(game->sockets[cur_player], &server_pack, sizeof(server_packet_t), 0); // Send ACK
-
-            // Send it to all the player, EXCEPT the current player
             server_packet_t server_packet;
             if ((i + 1) != activ_all_temp) broadcast_info(game); // Only broadcast if it is NOT the last iter.
         } else { // IF NACK
             printf("[Server] Client Handler Betting for Player: %d was FAILED \n",game->current_player);
             i -= 1;
             server_packet_t server_packet;
-            build_info_packet(game,cur_player,&server_packet); // Builds an INFO packet for a given PID and stores it inside server packet
             server_packet.packet_type = NACK; // Set that INFO packet type to be NACK
             send(game->sockets[cur_player],&server_packet, sizeof(server_packet_t), 0); // Send it to current player
         }

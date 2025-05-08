@@ -131,17 +131,18 @@ int main(int argc, char **argv) {
             }
         }
 
-        server_ready(&game);
-        reset_game_state(&game); // Reset the game server, assign the cur_player based on dealer
-
-        if (game.num_players == 1){
+        int chk_ready = server_ready(&game);
+        
+        if (chk_ready == 0){ // Less than 2 player ready, HALT
             server_packet_t server_packet;
             server_packet.packet_type = HALT;
             send(game.sockets[game.current_player], &server_packet, sizeof(server_packet_t), 0); // Sends HALT
             break;
-        } else if (game.num_players < 1){
+        } else if (chk_ready == -1){ // All Players Left, just break
             break;
         }
+
+        reset_game_state(&game); // Reset the game server, assign the cur_player based on dealer
 
         // PREFLOP STATE
         // DEAL TO PLAYERS
@@ -208,6 +209,10 @@ int main(int argc, char **argv) {
                 if (game.player_status[i] != PLAYER_FOLDED && game.player_status[i] != PLAYER_LEFT) {
                     game.player_stacks[i] += game.pot_size; // Award the stacks to the remaining player
                     game.pot_size = 0; // Pot size is now 0
+                    
+                    for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
+                    game.highest_bet = 0;
+                    
                     broadcast_end(&game, i);
                 }
             }
@@ -215,6 +220,10 @@ int main(int argc, char **argv) {
             int winn = find_winner(&game); // Find Winner
             game.player_stacks[winn] += game.pot_size; // Award the stacks to the winner
             game.pot_size = 0; // Pot size is now 0
+            
+            for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
+            game.highest_bet = 0;
+            
             broadcast_end(&game, winn);
         }
     }
