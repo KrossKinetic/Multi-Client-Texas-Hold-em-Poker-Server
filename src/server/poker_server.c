@@ -134,9 +134,13 @@ int main(int argc, char **argv) {
         int chk_ready = server_ready(&game);
         
         if (chk_ready == 0){ // Less than 2 player ready, HALT
-            server_packet_t server_packet;
-            server_packet.packet_type = HALT;
-            send(game.sockets[game.current_player], &server_packet, sizeof(server_packet_t), 0); // Sends HALT
+            for (int i = 0; i < MAX_PLAYERS; i++){
+                if (game.player_status[i] != PLAYER_LEFT) {
+                    server_packet_t server_packet;
+                    server_packet.packet_type = HALT;
+                    send(game.sockets[i], &server_packet, sizeof(server_packet_t), 0); // Sends HALT                   
+                }
+            }
             break;
         } else if (chk_ready == -1){ // All Players Left, just break
             break;
