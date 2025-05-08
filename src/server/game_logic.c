@@ -578,6 +578,7 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
             activ_all_temp2--;
 
             if (activ_all < 2){ // If all except 1 folded, jump to end state
+                send(game->sockets[cur_player], &server_pack, sizeof(server_packet_t), 0); // Send ACK
                 return 1; // return 1 if isEnd
             }
         } 
