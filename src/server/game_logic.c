@@ -519,12 +519,7 @@ void broadcast_info(game_state_t *game) {
     for (int i = 0; i < MAX_PLAYERS; i++) {  
         if (game->player_status[i] == PLAYER_LEFT) continue;
         build_info_packet(game,i,&server_packet); // Builds an INFO packet for a given PID and stores it inside server packet
-        ssize_t bytes_sent = send(game->sockets[i], &server_packet, sizeof(server_packet_t), 0); 
-        if (bytes_sent == -1) {
-            perror("[Server] send error in broadcast_info");
-        } else if (bytes_sent < sizeof(server_packet_t)) {
-            fprintf(stderr, "[Server] WARN: Partial send in broadcast_info to player %d. Sent %zd of %zu bytes.\n", i, bytes_sent, sizeof(server_packet_t));
-        }
+        send(game->sockets[i], &server_packet, sizeof(server_packet_t), 0); 
     }
 }
 
@@ -552,8 +547,8 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
     }
 
     int activ_all = activ + all;
-    int activ_all_temp = game->num_players - folded;
-    int activ_all_temp2 = game->num_players - folded;
+    int activ_all_temp = activ;
+    int activ_all_temp2 = activ;
 
     // Expect betting response after INFO being sent out
     for (int i = 0; i < activ_all_temp; i++) { // Continue to go around betting until everyone has either folded or matched the current bet
@@ -569,16 +564,13 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
         
         int chk = handle_client_action(game,cur_player,received_packet,&server_pack);
 
-        printf("CHK value for Player %d \n", cur_player);
-        
-        // send(game->sockets[cur_player], &server_pack, sizeof(server_packet_t), 0); // Send NACK if invalid response, or ACK if valid
+        send(game->sockets[cur_player],&server_pack, sizeof(server_packet_t), 0);
 
         if (received_packet->packet_type == FOLD) { // Treat FOLD separately because it will pass no matter what in this scenario
-            activ_all--; // One active player folded
+            activ--; // One active player folded
             activ_all_temp2--;
 
-            if (activ_all < 2){ // If all except 1 folded, jump to end state
-                send(game->sockets[cur_player], &server_pack, sizeof(server_packet_t), 0); // Send ACK
+            if (activ < 2){ // If all except 1 folded, jump to end state
                 return 1; // return 1 if isEnd
             }
         } 
@@ -589,15 +581,11 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
         
             if ((i + 1) != activ_all_temp) find_next_player(game,0);
             else find_next_player(game,1);
-            send(game->sockets[cur_player], &server_pack, sizeof(server_packet_t), 0); // Send ACK
-            server_packet_t server_packet;
+
             if ((i + 1) != activ_all_temp) broadcast_info(game); // Only broadcast if it is NOT the last iter.
         } else { // IF NACK
             printf("[Server] Client Handler Betting for Player: %d was FAILED \n",game->current_player);
-            i -= 1;
-            server_packet_t server_packet;
-            server_packet.packet_type = NACK; // Set that INFO packet type to be NACK
-            send(game->sockets[cur_player],&server_packet, sizeof(server_packet_t), 0); // Send it to current player
+            i -= 1;        
         }
     }
     return 0; // Betting successful

@@ -50,12 +50,9 @@ int handle_client_action(game_state_t *game, player_id_t pid, const client_packe
         } 
 
         game->player_status[pid] = PLAYER_LEFT; // Player has left 
-        game->player_stacks[pid] = 0;
         if (out != NULL) out->packet_type = ACK;
         return 0;
     } else if (in->packet_type == RAISE){
-        // Raise the bet by allowing it IF : (The bet you placed before in the round + raise amount) > highest bet
-        // Raise if in PREFLOP, FLOP, RIVER, TURN (4 bets)
         if ((game->round_stage == ROUND_PREFLOP || game->round_stage == ROUND_FLOP || game->round_stage == ROUND_RIVER || game->round_stage == ROUND_TURN) && (game->current_player == pid) && (in->params[0] > 0)){
             if ((game->current_bets[pid] + in->params[0]) > game->highest_bet && (in->params[0] <= game->player_stacks[pid])){
                 int new_player_total_bet_this_round = game->current_bets[pid] + in->params[0];
@@ -80,7 +77,7 @@ int handle_client_action(game_state_t *game, player_id_t pid, const client_packe
                 game->player_status[pid] = PLAYER_ALLIN;
             }
 
-            game->current_bets[pid] += amount_to_add; // Add highest bet to the current player bit 
+            game->current_bets[pid] += amount_to_add; // Add highest bet to the current player bet 
             game->player_stacks[pid] -= amount_to_add; // Subtract the highest bet from the current player stacks
             game->pot_size += amount_to_add; // Add money to the pot
             out->packet_type = ACK;

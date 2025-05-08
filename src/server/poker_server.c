@@ -207,23 +207,15 @@ int main(int argc, char **argv) {
         if (isEnd == 1){ // This means only one player is left who is NOT folded, find him and award him everything.
             for (int i = 0; i < MAX_PLAYERS; i++){
                 if (game.player_status[i] != PLAYER_FOLDED && game.player_status[i] != PLAYER_LEFT) {
+                    
                     game.player_stacks[i] += game.pot_size; // Award the stacks to the remaining player
-                    game.pot_size = 0; // Pot size is now 0
-                    
-                    for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
-                    game.highest_bet = 0;
-                    
-                    broadcast_end(&game, i);
+                    broadcast_end(&game, i);                    
                 }
             }
         } else {
             int winn = find_winner(&game); // Find Winner
-            game.player_stacks[winn] += game.pot_size; // Award the stacks to the winner
-            game.pot_size = 0; // Pot size is now 0
             
-            for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
-            game.highest_bet = 0;
-            
+            game.player_stacks[winn] += game.pot_size; // Award the stacks to the remaining player
             broadcast_end(&game, winn);
         }
     }
