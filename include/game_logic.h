@@ -55,7 +55,6 @@ void sort_cards(card_t *val);
 int compare_cards_by_rank_desc(const void *a, const void *b);
 int get_suit(card_t card);
 int get_card_rank(card_t card);
-void find_next_player(game_state_t *game);
 
 void server_join(game_state_t *game);
 int server_ready(game_state_t *game);

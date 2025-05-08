@@ -25,7 +25,6 @@ int handle_client_action(game_state_t *game, player_id_t pid, const client_packe
         return -1;
     }
 
-    // Check if player wants to JOIN
     if (in->packet_type == READY){
         // Check if game is at START
         if (!(game->round_stage == ROUND_INIT)){
@@ -111,10 +110,23 @@ void build_info_packet(game_state_t *game, player_id_t pid, server_packet_t *out
     out->info.dealer = game->dealer_player;
     out->info.player_turn = game->current_player;
     out->info.bet_size = game->highest_bet;
-    memcpy(out->info.player_stacks, game->player_stacks, sizeof(int) * MAX_PLAYERS);
-    memcpy(out->info.player_bets, game->current_bets, sizeof(int) * MAX_PLAYERS);
-    memcpy(out->info.player_cards, game->player_hands[pid], sizeof(card_t) * HAND_SIZE);
-    memcpy(out->info.community_cards, game->community_cards, sizeof(card_t) * MAX_COMMUNITY_CARDS);
+    
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        out->info.player_stacks[i] = game->player_stacks[i];
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        out->info.player_bets[i] = game->current_bets[i];
+    }
+
+    for (int i = 0; i < HAND_SIZE; i++) {
+        out->info.player_cards[i] = game->player_hands[pid][i];
+    }
+
+    for (int i = 0; i < MAX_COMMUNITY_CARDS; i++) {
+        out->info.community_cards[i] = game->community_cards[i];
+    }
+
     for (int i = 0; i < MAX_PLAYERS; ++i) {
         switch (game->player_status[i]) {
             case PLAYER_ACTIVE:
@@ -137,17 +149,15 @@ void build_end_packet(game_state_t *game, player_id_t winner, server_packet_t *o
     end_packet_t *end_info = &(out->end);
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (game->player_status[i] != PLAYER_LEFT) {
-            memcpy(end_info->player_cards[i], game->player_hands[i], sizeof(card_t) * HAND_SIZE);
-        } else {
-            // For players who left, their cards are not relevant or shown
-            end_info->player_cards[i][0] = NOCARD;
-            end_info->player_cards[i][1] = NOCARD;
-        }
+        end_info->player_stacks[i] = game->player_stacks[i];
+        end_info->player_cards[i][0] = game->player_hands[i][0];
+        end_info->player_cards[i][1] = game->player_hands[i][1];
     }
 
-    memcpy(end_info->community_cards, game->community_cards, sizeof(card_t) * MAX_COMMUNITY_CARDS);
-    memcpy(end_info->player_stacks, game->player_stacks, sizeof(int) * MAX_PLAYERS);
+    for (int i = 0; i < MAX_COMMUNITY_CARDS; i++) {
+        end_info->community_cards[i] = game->community_cards[i];
+    }
+
     end_info->pot_size = game->pot_size;
     end_info->dealer = game->dealer_player;
     end_info->winner = winner;

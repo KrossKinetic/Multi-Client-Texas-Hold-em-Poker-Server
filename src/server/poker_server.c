@@ -19,7 +19,10 @@ void sort_cards(card_t *val);
 int compare_cards_by_rank_desc(const void *a, const void *b);
 int get_suit(card_t card);
 int get_card_rank(card_t card);
-void find_next_player(game_state_t *game);
+void find_next_player(game_state_t *game, int flag);
+void broadcast_end(game_state_t *game, int pid);
+int do_betting(game_state_t *game, client_packet_t *received_packet);
+void broadcast_info(game_state_t *game);
 
 typedef struct {
     int socket;
@@ -93,14 +96,13 @@ int main(int argc, char **argv) {
         // /workspaces/cse220_hw5/build/tui.client
         if (received_packet.packet_type == JOIN) {
             printf("[Server] Player %d sent JOIN packet successfully.\n", i);
-        } else {
-            fprintf(stderr, "[Server] Player %d: Expected JOIN, received type %d. Protocol error.\n", i, received_packet.packet_type);
-            exit(EXIT_FAILURE);
         }
     }
 
+    int isEnd;
+    game.dealer_player = -1;
     while (1) {
-        break;
+        isEnd = 0;
         // INIT STATE
         // READY
         game.round_stage = ROUND_INIT;
@@ -129,7 +131,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        server_ready(&game); // Ready the server, assign the dealer
+        server_ready(&game);
         reset_game_state(&game); // Reset the game server, assign the cur_player based on dealer
 
         if (game.num_players == 1){
@@ -144,90 +146,77 @@ int main(int argc, char **argv) {
         // PREFLOP STATE
         // DEAL TO PLAYERS
         // PREFLOP BETTING
+        printf("[Server] ENTERING PREFLOP STAGE");
         game.round_stage = ROUND_PREFLOP;
         server_deal(&game); // Deal Cards to all ACTIVE players
+        broadcast_info(&game); // Send INFO packet to all the ACTIVE players
         
+        isEnd = do_betting(&game, &received_packet);
         
-        // Send INFO packet to all the ACTIVE players
-        for (int i = 0; i < MAX_PLAYERS; i++) {  
-            if (game.player_status[i] == PLAYER_LEFT) continue;
-            server_packet_t server_packet;
-            build_info_packet(&game,i,&server_packet); // Builds an INFO packet for a given PID and stores it inside server packet
-            ssize_t bytes_sent = send(game.sockets[i], &server_packet, sizeof(server_packet_t), 0); // Sends the INFO packet
+        for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
+        game.highest_bet = 0;
+
+        if (isEnd == 0){
+            printf("[Server] ENTERING FLOP STAGE");
+            // FLOP STATE
+            // PLACE FLOP CARDS
+            // FLOP BETTING
+            game.round_stage = ROUND_FLOP;
+            server_community(&game); // Adds 3 cards to community
+            broadcast_info(&game); // Send INFO packet to all the ACTIVE players with new points
+            
+            isEnd = do_betting(&game, &received_packet);
+
+            for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
+            game.highest_bet = 0;
         }
 
-        // Calculate Active Players : 
-        int activ = 0;
-        for (int i = 0; i < MAX_PLAYERS; i++) {  
-            if (game.player_status[i] == PLAYER_ACTIVE) activ++;
+        if (isEnd == 0){
+            printf("[Server] ENTERING TURN STAGE");
+            // TURN STATE
+            game.round_stage = ROUND_TURN;
+            server_community(&game); // Adds +1 cards to community
+            broadcast_info(&game); // Send INFO packet to all the ACTIVE players with new points
+            
+            isEnd = do_betting(&game, &received_packet);  
+            
+            for (int i = 0; i < MAX_PLAYERS; i++) game.current_bets[i] = 0 ;
+            game.highest_bet = 0;
         }
 
-        // Expect betting response after INFO being sent out
-        for (int i = 0; i < activ; i++) { // Continue to go around betting until everyone has either folded or matched the current bet
-            // Get current player
-            int cur_player = game.current_player;
+        if (isEnd == 0){
+            printf("[Server] ENTERING RIVER STAGE");
+            // RIVER STATE
+            game.round_stage = ROUND_RIVER;
+            server_community(&game); // Adds +1 cards to community
+            broadcast_info(&game); // Send INFO packet to all the ACTIVE players with new points
             
-            // Handle Client Request
-            // Store Server Packet
-            read(game.sockets[cur_player], &received_packet, sizeof(client_packet_t)); //  Read the Packet Sent 
-            
-            server_packet_t server_pack;
+            isEnd = do_betting(&game, &received_packet);
+        }
+        
+        if (isEnd == 0){
+            printf("[Server] ENTERING SHOWDOWN STAGE");
+            // SHOWDOWN STATE
+            // ROUND_SHOWDOWN
+            game.round_stage = ROUND_SHOWDOWN;
+        }
 
-            int chk = handle_client_action(&game,cur_player,&received_packet,&server_pack);
-            send(game.sockets[cur_player], &server_pack, sizeof(server_packet_t), 0); // Send NACK if invalid response, or ACK if valid
-            
-            if (received_packet.packet_type == FOLD) { // Treat FOLD separately because it will pass no matter what in this scenario
-                // Check how many people active and all in and jump to END state if all but one folded (TODO)
-                
-                // If num_players > 2 then : 
-                find_next_player(&game);
-                // Send INFO packet to all the ACTIVE players
-                for (int i = 0; i < MAX_PLAYERS; i++) {  
-                    if (game.player_status[i] == PLAYER_LEFT) continue;
-                    server_packet_t server_packet;
-                    build_info_packet(&game,i,&server_packet); // Builds an INFO packet for a given PID and stores it inside server packet
-                    ssize_t bytes_sent = send(game.sockets[i], &server_packet, sizeof(server_packet_t), 0); // Sends the INFO packet
-                }
-                continue;
-            } 
-
-            if (chk != -1){
-                if (received_packet.packet_type == RAISE) i = 0; // Reset i if successfully raised
-                find_next_player(&game);
-                // Send INFO packet to all the ACTIVE players
-                for (int i = 0; i < MAX_PLAYERS; i++) {  
-                    if (game.player_status[i] == PLAYER_LEFT) continue;
-                    server_packet_t server_packet;
-                    build_info_packet(&game,i,&server_packet); // Builds an INFO packet for a given PID and stores it inside server packet
-                    ssize_t bytes_sent = send(game.sockets[i], &server_packet, sizeof(server_packet_t), 0); // Sends the INFO packet
-                }
-                break;    
-            } else {
-                i -= 1;
-                // Send INFO packet to all the ACTIVE players
-                for (int i = 0; i < MAX_PLAYERS; i++) {  
-                    if (game.player_status[i] == PLAYER_LEFT) continue;
-                    server_packet_t server_packet;
-                    build_info_packet(&game,i,&server_packet); // Builds an INFO packet for a given PID and stores it inside server packet
-                    ssize_t bytes_sent = send(game.sockets[i], &server_packet, sizeof(server_packet_t), 0); // Sends the INFO packet
+        // END State :
+        printf("[Server] ENTERING END STAGE");
+        if (isEnd == 1){ // This means only one player is left who is NOT folded, find him and award him everything.
+            for (int i = 0; i < MAX_PLAYERS; i++){
+                if (game.player_status[i] != PLAYER_FOLDED && game.player_status[i] != PLAYER_LEFT) {
+                    game.player_stacks[i] += game.pot_size; // Award the stacks to the remaining player
+                    game.pot_size = 0; // Pot size is now 0
+                    broadcast_end(&game, i);
                 }
             }
+        } else {
+            int winn = find_winner(&game); // Find Winner
+            game.player_stacks[winn] += game.pot_size; // Award the stacks to the winner
+            game.pot_size = 0; // Pot size is now 0
+            broadcast_end(&game, winn);
         }
-
-        // FLOP STATE
-        // PLACE FLOP CARDS
-        // FLOP BETTING
-
-        // TURN STATE
-        // PLACE TURN CARDS
-        // TURN BETTING
-
-        // RIVER STATE
-        // PLACE RIVER CARDS
-        // RIVER BETTING
-        
-        // SHOWDOWN STATE
-        // ROUND_SHOWDOWN
     }
 
     printf("[Server] Shutting down.\n");
