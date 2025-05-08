@@ -9,14 +9,6 @@
 #include "client_action_handler.h"
 #include "game_logic.h"
 
-int calculate_5card_value(card_t current_hand[]);
-int set_card_tie(int final_points, int ranks[]);
-void sort_cards(card_t *val);
-int compare_cards_by_rank_desc(const void *a, const void *b);
-int get_suit(card_t card);
-int get_card_rank(card_t card);
-void find_next_player(game_state_t *game, int flag);
-
 //Feel free to add your own code. I stripped out most of our solution functions but I left some "breadcrumbs" for anyone lost
 void init_deck(card_t deck[DECK_SIZE], int seed){ //DO NOT TOUCH THIS FUNCTION
     srand(seed);
@@ -46,32 +38,7 @@ void init_game_state(game_state_t *game, int starting_stack, int random_seed){
     }
 }
 
-/*
- * Resets the game state between hands to prepare for the next deal.
- * This function assumes that:
- * - The previous hand's winner has been determined and pot awarded (player_stacks updated).
- * - READY/LEAVE statuses have been processed for all players.
- * - Final player eligibility (player_status: ACTIVE/LEFT/BUSTED) for the *next* hand is set.
- * - The dealer position (dealer_player) for the *next* hand has been set.
- *
- * What this function DOES reset:
- * - Shuffles the deck array.
- * - Clears player_hands (sets cards to NOCARD).
- * - Clears community_cards (sets cards to NOCARD).
- * - Resets next_card index to 0.
- * - Resets current_bets for all players to 0.
- * - Resets highest_bet to 0.
- * - Resets pot_size to 0.
- * - Sets round_stage to ROUND_PREFLOP.
- * - Calculates and sets the initial current_player for the new hand.
- *
- * What this function does NOT handle (should be done *before* calling this):
- * - Updating player_stacks with wins/losses from the previous hand.
- * - Processing network packets for READY/LEAVE signals.
- * - Determining final player_status based on READY/LEAVE and chip counts.
- * - Rotating/setting the dealer_player for the new hand.
- * - Checking for the HALT condition (< 2 active players).
- */
+// Reset Game
 void reset_game_state(game_state_t *game) {
     shuffle_deck(game->deck);
     
@@ -113,31 +80,7 @@ void reset_game_state(game_state_t *game) {
     game->current_player = cur_player;
 }
 
-/*
- * Determines player eligibility for the next hand, checks if the game can continue,
- * and assigns the dealer for the upcoming hand.
- *
- * !!! CRUCIAL ASSUMPTION !!!
- * This function relies on the network handling code (run *before* this)
- * having already set game->player_status[i] = PLAYER_LEFT for any player 'i'
- * who sent a LEAVE packet OR who timed out / did not send a READY packet
- * during the inter-hand waiting period. Status is assumed to be left unchanged
- * by the network code only if READY was successfully received.
- *
- * Actions performed within this function:
- * 1. Finalizes Player Status: Iterates through all players:
- * - If a player has chips (stack > 0) AND their status was not already set
- * to PLAYER_LEFT by the network code (implying READY was received),
- * their status is set to PLAYER_ACTIVE for the next hand.
- * - Otherwise (no chips OR already marked PLAYER_LEFT), their status is
- * confirmed or set to PLAYER_LEFT.
- * 2. Counts Active Players: Tallies the number of players successfully set to PLAYER_ACTIVE.
- * 3. Checks Halt Condition: If the active player count is less than 2, returns 0 (signal to HALT).
- * 4. Assigns New Dealer: If the game proceeds (count >= 2), finds the first
- * PLAYER_ACTIVE player clockwise starting after the *previous* dealer. Updates
- * game->dealer_player to this new dealer's index.
- * 5. Returns Proceed Signal: If the game proceeds, returns 1.
- */
+// Readies the server
 int server_ready(game_state_t *game) {
     //This function updated the dealer and checked ready/leave status for all players
     // Update Ready / Leave status for all players
@@ -181,62 +124,7 @@ void server_deal(game_state_t *game) {
     }
 }
 
-/*
- * Determines if the current betting round has concluded.
- * Checks two conditions:
- * 1. If fewer than two players remain active in the hand (status PLAYER_ACTIVE or PLAYER_ALLIN).
- * 2. If all players who are still able to act (status PLAYER_ACTIVE) have
- * matched the current highest bet for this round (game->current_bets[i] >= game->highest_bet).
- * (Players who are PLAYER_ALLIN are considered to have completed their action).
- *
- * This check should be performed after each player action to see if the round
- * should transition to the next stage (e.g., dealing next community card or showdown).
- *
- * @param game Pointer to the current game state.
- * @return int - Returns 1 if the betting round is finished, 0 if it needs to continue.
- */
-int server_bet(game_state_t *game) {
-    //This was our function to determine if everyone has called or folded
-
-    int player_count = 0;
-    for (int i = 0; i < MAX_PLAYERS; i++){
-        if (game->player_status[i] == PLAYER_ACTIVE || game->player_status[i] == PLAYER_ALLIN){
-            player_count++;
-        }
-    }
-
-    if (player_count < 2){
-        // If 1 or 0 player left, round is over
-        return 1;
-    }
-
-    for (int i = 0; i < MAX_PLAYERS; i++){
-        if (game->player_status[i] == PLAYER_ACTIVE){
-            if (game->current_bets[i] < game->highest_bet){
-                return 0;
-            }
-        }
-    }
-
-    return 1;
-}
-
-/*
- * Deals the appropriate community cards based on the current game stage.
- * This function is intended to be called *after* the previous betting round
- * has concluded and the game->round_stage has been updated to the stage
- * for which cards should now be dealt (e.g., ROUND_FLOP, ROUND_TURN, or ROUND_RIVER).
- *
- * - If the current stage is ROUND_FLOP, it deals 3 cards.
- * - If the current stage is ROUND_TURN, it deals the 4th card.
- * - If the current stage is ROUND_RIVER, it deals the 5th card.
- *
- * It deals cards from the game->deck using and incrementing game->next_card.
- * Includes basic safety checks to prevent dealing beyond the deck size.
- *
- * @param game Pointer to the game_state_t struct, which will be modified
- * (community_cards and next_card fields).
- */
+// Deals community cards
 void server_community(game_state_t *game) {
     round_stage_t round_stage = game->round_stage;
     if (round_stage == ROUND_FLOP) {
@@ -536,14 +424,10 @@ void broadcast_end(game_state_t *game, int pid) {
 int do_betting(game_state_t *game, client_packet_t *received_packet){
     int activ = 0;
     int all = 0;
-    int folded = 0;
-    int left = 0;
 
     for (int i = 0; i < MAX_PLAYERS; i++) {  
         if (game->player_status[i] == PLAYER_ACTIVE) activ++;
         if (game->player_status[i] == PLAYER_ALLIN ) all++;
-        if (game->player_status[i] == PLAYER_FOLDED) folded++;
-        if (game->player_status[i] == PLAYER_LEFT) left++;
     }
 
     int activ_all = activ + all;
@@ -552,11 +436,7 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
 
     // Expect betting response after INFO being sent out
     for (int i = 0; i < activ_all_temp; i++) { // Continue to go around betting until everyone has either folded or matched the current bet
-        // Get current player
-
         int cur_player = game->current_player;
-        
-        printf("[Server] Betting for Player: %d \n",game->current_player);
         
         read(game->sockets[cur_player], received_packet, sizeof(client_packet_t)); //  Read the Packet Sent 
         
@@ -576,7 +456,6 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
         } 
 
         if (chk == 0){ // IF ACK
-            printf("[Server] Client Handler Betting for Player: %d was a SUCCESS \n",game->current_player);
             if (received_packet->packet_type == RAISE) {i = 0;activ_all_temp=activ_all_temp2;} // Reset i if successfully raised
         
             if ((i + 1) != activ_all_temp) find_next_player(game,0);
@@ -584,7 +463,6 @@ int do_betting(game_state_t *game, client_packet_t *received_packet){
 
             if ((i + 1) != activ_all_temp) broadcast_info(game); // Only broadcast if it is NOT the last iter.
         } else { // IF NACK
-            printf("[Server] Client Handler Betting for Player: %d was FAILED \n",game->current_player);
             i -= 1;        
         }
     }

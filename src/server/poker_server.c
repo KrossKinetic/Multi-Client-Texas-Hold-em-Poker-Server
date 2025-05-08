@@ -36,7 +36,6 @@ int main(int argc, char **argv) {
     int opt = 1;
     struct sockaddr_in server_address;
     player_t players[MAX_PLAYERS];
-    char buffer[BUFFER_SIZE] = {0};
     socklen_t addrlen = sizeof(struct sockaddr_in);
 
     int rand_seed = argc == 2 ? atoi(argv[1]) : 0;
