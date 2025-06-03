@@ -1,4 +1,4 @@
-# CSE 220 HW5: Multi-Client Texas Hold'em Poker Server
+# Multi-Client Texas Hold'em Poker Server
 
 This project is a server application that manages a six-player game of Texas Hold'em poker. The server is written in C and uses the sockets API to communicate with multiple clients concurrently. It is responsible for managing the entire game lifecycle, including dealing cards, handling player actions, tracking bets, and determining the winner of each hand.
 
